@@ -3,7 +3,7 @@ import { fetchGitHubRepo } from '../services/github.js';
 import { runChaosSimulation } from '../services/chaos.js';
 import { generateReview } from '../services/ai-review.js';
 import { calculateScore } from '../services/scoring.js';
-import { getLeaderboard, addToLeaderboard } from '../services/leaderboard.js';
+import { getLeaderboard, addToLeaderboard, getProjectById } from '../services/leaderboard.js';
 
 export const apiRouter = Router();
 
@@ -15,7 +15,7 @@ apiRouter.post('/submit', async (req, res) => {
   try {
     const { url, customConfig } = req.body;
     console.log(`[API] Submit request for URL: ${url}`);
-    
+
     if (!url || typeof url !== 'string' || url.trim() === '') {
       return res.status(400).json({ error: 'URL is required' });
     }
@@ -30,7 +30,7 @@ apiRouter.post('/submit', async (req, res) => {
         // Not a URL? Treat the string itself as the project name/desc
         name = url.substring(0, 30);
       }
-      
+
       return res.json({
         name: name,
         fullName: url,
@@ -51,7 +51,7 @@ apiRouter.post('/submit', async (req, res) => {
     if (customConfig) {
       projectInfo.customConfig = customConfig;
     }
-    
+
     res.json(projectInfo);
   } catch (error) {
     console.error(`[API] Submit error:`, error);

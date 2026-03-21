@@ -9,6 +9,7 @@ export async function generateReview(projectInfo, attackResults) {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
+  const grokKey = process.env.GROK_API_KEY;
 
   const prompt = buildPrompt(projectInfo, attackResults);
 
@@ -16,7 +17,11 @@ export async function generateReview(projectInfo, attackResults) {
   if (openRouterKey && openRouterKey.trim() !== '') {
     console.log('🤖 Using OpenRouter for review');
     try {
-      return await callOpenRouter(openRouterKey, prompt);
+      const review = await callOpenRouter(openRouterKey, prompt);
+      if (grokKey && grokKey.trim() !== '') {
+        review.roast = await callGrokRoast(grokKey, projectInfo, attackResults);
+      }
+      return review;
     } catch (err) {
       console.error('OpenRouter error, trying fallback:', err.message);
     }
@@ -26,7 +31,11 @@ export async function generateReview(projectInfo, attackResults) {
   if (geminiKey && geminiKey.trim() !== '') {
     console.log('🤖 Using Google Gemini for review');
     try {
-      return await callGemini(geminiKey, prompt);
+      const review = await callGemini(geminiKey, prompt);
+      if (grokKey && grokKey.trim() !== '') {
+        review.roast = await callGrokRoast(grokKey, projectInfo, attackResults);
+      }
+      return review;
     } catch (err) {
       console.error('Gemini error, trying fallback:', err.message);
     }
@@ -36,14 +45,29 @@ export async function generateReview(projectInfo, attackResults) {
   if (openaiKey && openaiKey.trim() !== '') {
     console.log('🤖 Using OpenAI for review');
     try {
-      return await callOpenAI(openaiKey, prompt);
+      const review = await callOpenAI(openaiKey, prompt);
+      if (grokKey && grokKey.trim() !== '') {
+        review.roast = await callGrokRoast(grokKey, projectInfo, attackResults);
+      }
+      return review;
     } catch (err) {
       console.error('OpenAI error, falling back to mock:', err.message);
     }
   }
 
   console.log('⚠ No AI API key set — using smart mock review engine');
-  return generateMockReview(projectInfo, attackResults);
+  const review = generateMockReview(projectInfo, attackResults);
+
+  // Apply Grok roast if key is available, even for mock results
+  if (grokKey && grokKey.trim() !== '') {
+    try {
+      review.roast = await callGrokRoast(grokKey, projectInfo, attackResults);
+    } catch (err) {
+      console.error('Grok roast failed:', err.message);
+    }
+  }
+
+  return review;
 }
 
 /**
@@ -95,23 +119,39 @@ Respond in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
 {
   "roast": "One devastating witty sentence about this SPECIFIC project based on the real findings above",
   "issues": ["Specific issue 1 with evidence", "Specific issue 2 with evidence", "Specific issue 3", "Specific issue 4", "Specific issue 5"],
-  "fixes": ["Specific fix 1 with exact package/tool names", "Specific fix 2", "Specific fix 3", "Specific fix 4", "Specific fix 5"],
-  "prevention": ["System-level improvement 1", "System-level improvement 2", "System-level improvement 3"],
+  "fixes": [
+    {
+      "title": "Short title of fix",
+      "issue": "What is being fixed",
+      "how": "Step-by-step implementation guide",
+      "where": "Suggested file path or component name",
+      "code": "One-line or short block of code for this fix"
+    }
+  ],
+  "prevention": [
+    {
+      "feature": "Name of innovative feature",
+      "description": "How this feature improves the project",
+      "benefit": "Why this makes it stand out in a hackathon",
+      "codeSnippet": "Example implementation code"
+    }
+  ],
   "impact": "2-3 sentences about why the specific failing checks matter in production",
-  "topFixBefore": "A 3-4 line raw code snippet showing the vulnerable/missing state based on the TOP FIX",
-  "topFixAfter": "A 3-4 line raw code snippet showing the corrected/secure state based on the TOP FIX",
-  "customVerdict": "If the Judge provided a CUSTOM INSTRUCTION below, write a dedicated 2-4 sentence response explicitly executing their manual test, answering their query, or evaluating their specific config instruction. If there was no custom instruction, leave this as an empty string."
+  "topFixBefore": "3-5 lines of EXACT VULNERABLE/MISSING CODE (referencing the actual project name or context)",
+  "topFixAfter": "3-5 lines of PRODUCTION-GRADE OPTIMIZED CODE that implements the fix with best practices",
+  "customVerdict": "Concise verdict on the judge's custom instruction."
 }
 
 RULES:
+- Provide exactly 3 detailed fixes and 2 innovative prevention features.
 - Reference real data: actual dependencies, actual file counts, actual missing tools
 - Don't say "the project" — use the project name "${projectInfo.name}"
 - Every issue must cite evidence from the analysis above
-- Every fix must name a specific package, tool, or action${
-  projectInfo.customConfig 
-  ? `\n\n🚨 JUDGE'S CUSTOM INSTRUCTION AND CONFIG 🚨\nThe Master Judge explicitly demanded to manually test/analyze this: "${projectInfo.customConfig}". \nYOU ABSOLUTELY MUST write the result of this manual test inside the "customVerdict" JSON field!` 
-  : ''
-}`;
+- Every fix must name a specific package, tool, or action with implementation context
+- In "prevention", suggest at least ONE highly innovative feature that leverages the project's tech stack (e.g. 'Add real-time collaboration using Socket.io' if it's a dashboard)${projectInfo.customConfig
+      ? `\n\n🚨 JUDGE'S CUSTOM INSTRUCTION AND CONFIG 🚨\nThe Master Judge explicitly demanded to manually test/analyze this: "${projectInfo.customConfig}". \nYOU ABSOLUTELY MUST write the result of this manual test inside the "customVerdict" JSON field!`
+      : ''
+    }`;
 }
 
 // ===== GEMINI API =====
@@ -163,9 +203,9 @@ async function callOpenAI(apiKey, prompt) {
 
 // ===== OPENROUTER API =====
 async function callOpenRouter(apiKey, prompt) {
-  const openai = new OpenAI({ 
+  const openai = new OpenAI({
     baseURL: "https://openrouter.ai/api/v1",
-    apiKey: apiKey 
+    apiKey: apiKey
   });
 
   const response = await openai.chat.completions.create({
@@ -178,6 +218,40 @@ async function callOpenRouter(apiKey, prompt) {
   const content = response.choices[0].message.content;
   const cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
   return JSON.parse(cleaned);
+}
+
+/**
+ * callGrokRoast (using Groq OpenAI-compatible API)
+ * Specifically generates a witty, devastating roast.
+ */
+async function callGrokRoast(apiKey, info, attackResults) {
+  const openai = new OpenAI({
+    baseURL: "https://api.groq.com/openai/v1",
+    apiKey: apiKey
+  });
+
+  const failed = attackResults.filter(a => !a.passed);
+  const prompt = `You are a brutally honest, witty, and devastating hackathon judge named "Grok". 
+   Your job is to write ONE short, punchy, and hilarious roast sentence about the project "${info.name}".
+   
+   CONTEXT:
+   - Project Name: ${info.name}
+   - Description: ${info.description}
+   - Language: ${info.language}
+   - Quality: ${failed.length} checks failed out of ${attackResults.length}
+   - Major Fails: ${failed.map(a => a.name).join(', ')}
+   
+   Write a single devastating sentence. Be specific to the context above. No intro, no quotes, just the roast.`;
+
+  console.log('🔥 Using Groq (Grok mode) for the roast');
+  const response = await openai.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 1.0,
+    max_tokens: 100,
+  });
+
+  return response.choices[0].message.content.trim().replace(/^"|"$/g, '');
 }
 
 // ===== SMART MOCK FALLBACK =====
@@ -211,20 +285,41 @@ function generateMockReview(projectInfo, attackResults) {
 
   // Build fixes from real missing items
   const fixes = [];
-  if (!q.hasTests) fixes.push(`Add ${projectInfo.language === 'Python' ? 'pytest' : 'vitest or jest'} with at least one test per module — start with the critical paths`);
-  if (!q.hasCI) fixes.push('Create .github/workflows/ci.yml with lint, test, and build steps — takes 5 minutes via GitHub Actions starter templates');
-  if (!q.hasHelmet && (projectInfo.dependencies || []).includes('express')) fixes.push('Install helmet (npm i helmet) and add app.use(helmet()) — one line for 11 security headers');
-  if (!q.hasRateLimit) fixes.push('Add express-rate-limit: const limiter = rateLimit({ windowMs: 15*60*1000, max: 100 }); app.use(limiter)');
-  if (!q.hasValidation) fixes.push('Install zod (npm i zod) and validate all request bodies — z.object({...}).parse(req.body) catches bad input at the edge');
-  if (fixes.length < 5) {
-    fixes.push('Add structured error handling with http-errors: throw createError(404, "Not Found") instead of raw Error()');
-    fixes.push('Set up pre-commit hooks with husky + lint-staged to catch issues before they reach the repository');
-  }
+  if (!q.hasTests) fixes.push({
+    title: "Implement Core Testing",
+    issue: "Zero automated test coverage",
+    how: `Add ${projectInfo.language === 'Python' ? 'pytest' : 'vitest'} to the pipeline`,
+    where: "tests/core.test.js",
+    code: "test('should work', () => { expect(1).toBe(1); });"
+  });
+  if (!q.hasRateLimit) fixes.push({
+    title: "Add DoS Protection",
+    issue: "API is vulnerable to brute-force and DoS",
+    how: "Apply express-rate-limit middleware",
+    where: "server/index.js",
+    code: "app.use(rateLimit({ windowMs: 15*60*1000, max: 100 }));"
+  });
+  if (!q.hasHelmet) fixes.push({
+    title: "Secure HTTP Headers",
+    issue: "Missing 11 standard security headers",
+    how: "Install and mount the Helmet middleware",
+    where: "server/index.js",
+    code: "const helmet = require('helmet'); app.use(helmet());"
+  });
 
   const prevention = [
-    q.hasCI ? 'Enhance CI pipeline with security scanning (Snyk/CodeQL) and performance benchmarks' : 'Set up CI/CD with GitHub Actions — automate linting, testing, and deployment',
-    'Implement structured logging (pino for Node.js, structlog for Python) with request correlation IDs',
-    'Add pre-merge checks: require passing tests + code review + no security alerts before any merge',
+    {
+      feature: "Real-time Observability",
+      description: "Live dashboard tracking system health and errors using OpenTelemetry",
+      benefit: "Reduces Mean Time to Recovery (MTTR) by 80%",
+      codeSnippet: "const sdk = new NodeSDK({ traceExporter: new ConsoleSpanExporter() });"
+    },
+    {
+      feature: "Redis Distributed Caching",
+      description: "Implement a look-aside cache for heavy database queries",
+      benefit: "Reduces database load by 90% during traffic spikes",
+      codeSnippet: "await redis.set(key, JSON.stringify(data), 'EX', 3600);"
+    }
   ];
 
   const impact = failedAttacks.length > 5
@@ -234,10 +329,10 @@ function generateMockReview(projectInfo, attackResults) {
   // Mock Before/After for the first fix
   let topFixBefore = `// Current State\napp.use('/', router);\n// No middleware configured`;
   let topFixAfter = `// Secured State\nconst helmet = require('helmet');\n\napp.use(helmet());\napp.use('/', router);`;
-  
+
   if (!q.hasTests) {
-    topFixBefore = `// No tests exist for critical features\nfunction processPayment(data) {\n  return db.save(data);\n}`;
-    topFixAfter = `// Added coverage\nimport { test, expect } from 'vitest';\n\ntest('processes payment correctly', () => {\n  expect(processPayment(mockData)).toBe(true);\n});`;
+    topFixBefore = `// In ${projectInfo.name}/server/index.js\napp.post('/register', (req, res) => {\n  db.users.save(req.body);\n  res.send('Done');\n});`;
+    topFixAfter = `// Fully tested and validated version\nimport { z } from 'zod';\nconst UserSchema = z.object({ email: z.string().email() });\n\napp.post('/register', validate(UserSchema), (req, res) => {\n  db.users.save(req.body);\n  res.status(201).json({ success: true });\n});`;
   }
 
   return {

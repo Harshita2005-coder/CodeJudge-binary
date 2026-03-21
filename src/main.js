@@ -6,10 +6,10 @@
 
 // ===== Resilience Level System =====
 const LEVELS = [
-  { min: 0,  max: 39, name: 'Fragile',          emoji: '💀', color: '#ff4444' },
-  { min: 40, max: 59, name: 'Unstable',         emoji: '⚠️', color: '#ffaa00' },
-  { min: 60, max: 74, name: 'Surviving',         emoji: '🧠', color: '#3b82f6' },
-  { min: 75, max: 89, name: 'Resilient',         emoji: '⚡', color: '#a855f7' },
+  { min: 0, max: 39, name: 'Fragile', emoji: '💀', color: '#ff4444' },
+  { min: 40, max: 59, name: 'Unstable', emoji: '⚠️', color: '#ffaa00' },
+  { min: 60, max: 74, name: 'Surviving', emoji: '🧠', color: '#3b82f6' },
+  { min: 75, max: 89, name: 'Resilient', emoji: '⚡', color: '#a855f7' },
   { min: 90, max: 100, name: 'Production Ready', emoji: '🚀', color: '#39e75f' },
 ];
 
@@ -33,7 +33,7 @@ const state = {
 };
 
 const SCREEN_IDS = [
-  'screen-landing', 'screen-processing', 'screen-attack',
+  'screen-landing', 'screen-processing', 'screen-xray', 'screen-attack',
   'screen-failures', 'screen-fix',
   'screen-score', 'screen-leaderboard',
 ];
@@ -178,7 +178,8 @@ function initLanding() {
       }
 
       state.projectInfo = data;
-      goToStep(1); // → Analyze
+      renderXRay();
+      goToStep(2); // → X-Ray Screen
     } catch (err) {
       error.textContent = err.message;
       btn.disabled = false;
@@ -189,6 +190,79 @@ function initLanding() {
   btn.addEventListener('click', handleSubmit);
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleSubmit();
+  });
+
+  const viewLbBtn = $('#view-leaderboard-btn');
+  if (viewLbBtn) {
+    viewLbBtn.addEventListener('click', async () => {
+      goToStep(7);
+      const res = await fetch('/api/leaderboard');
+      state.leaderboard = await res.json();
+      renderLeaderboard();
+    });
+  }
+
+  const startChaosBtn = $('#start-chaos-btn');
+  if (startChaosBtn) {
+    startChaosBtn.addEventListener('click', () => {
+      goToStep(1); // → Show processing logs
+      runProcessing();
+    });
+  }
+}
+
+// ===== X-Ray Analysis Rendering =====
+function renderXRay() {
+  const info = state.projectInfo;
+  const sig = info.qualitySignals || {};
+
+  // 1. Architecture
+  const arch = $('#xray-arch');
+  arch.innerHTML = `
+    <div class="xray-feature-item"><div class="xray-dot"></div> Frontend: ${sig.isSPA ? 'SPA (React/Vite)' : 'Static/Vanilla'}</div>
+    <div class="xray-feature-item"><div class="xray-dot"></div> Styling: ${sig.isTailwind ? 'Tailwind CSS' : 'Standard CSS'}</div>
+    <div class="xray-feature-item"><div class="xray-dot"></div> Backend: ${info.language === 'JavaScript' ? 'Node.js + Express' : info.language}</div>
+    <div class="xray-feature-item"><div class="xray-dot"></div> Total Files: ${info.totalFiles || 'Unknown'}</div>
+  `;
+
+  // 2. Features
+  const features = $('#xray-features');
+  features.innerHTML = '';
+  const featureList = [
+    { cond: sig.hasAuth, label: 'Authentication System' },
+    { cond: sig.hasDatabase, label: 'Database Operations' },
+    { cond: sig.hasRoutes, label: 'API-based Routing' },
+    { cond: sig.hasTests, label: 'Testing Suite' },
+    { cond: sig.hasCI, label: 'CI/CD Pipeline' },
+    { cond: sig.hasDocker, label: 'Containerized (Docker)' }
+  ].filter(f => f.cond);
+
+  if (featureList.length === 0) featureList.push({ cond: true, label: 'Standard Codebase' });
+
+  featureList.forEach(f => {
+    const div = document.createElement('div');
+    div.className = 'xray-feature-item';
+    div.innerHTML = `<div class="xray-dot"></div> ${f.label}`;
+    features.appendChild(div);
+  });
+
+  // 3. Risk Mapping
+  const risks = $('#xray-risks');
+  risks.innerHTML = '';
+  const riskList = [];
+  if (!sig.hasTests) riskList.push('Project has no automated tests');
+  if (!sig.hasCI) riskList.push('Manual deployment risk (no CI/CD)');
+  if (!sig.hasLinter) riskList.push('No code quality enforcement (linter)');
+  if (!sig.hasEnvExample) riskList.push('Missing environment templates');
+  if (!sig.hasTypescript && info.language === 'JavaScript') riskList.push('Unsafe type management (no TS)');
+
+  if (riskList.length === 0) riskList.push('Low structural risk detected');
+
+  riskList.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'xray-feature-item risk-item';
+    div.innerHTML = `<div class="xray-dot"></div> ${r}`;
+    risks.appendChild(div);
   });
 }
 
@@ -251,13 +325,16 @@ function runProcessing() {
       i++;
     } else {
       clearInterval(interval);
-      setTimeout(() => goToStep(2), 800); // → Attack
+      setTimeout(() => {
+        goToStep(3); // → Attack
+        runChaosSimulation();
+      }, 800);
     }
   }, 500);
 }
 
-// ===== Step 2: Attack =====
-function runAttack() {
+// ===== Step 3: Attack =====
+function runChaosSimulation() {
   const grid = $('#attack-grid');
   const summary = $('#attack-summary');
   grid.innerHTML = '';
@@ -289,7 +366,7 @@ function runAttack() {
         } else if (data.type === 'complete') {
           state.attackResults = data.results;
           showAttackSummary(summary);
-          setTimeout(() => goToStep(3), 2000); // → Breakpoint
+          setTimeout(() => goToStep(4), 2000); // → Breakpoint
         }
       }
     }
@@ -446,7 +523,7 @@ function renderReviewInline() {
 
   // Continue button
   addNextButton($('.failures-wrapper'), state.mode === 'judge' ? 'See Detailed Fixes →' : 'Show Me How To Fix This →', () => {
-    goToStep(4); // → Fix
+    goToStep(5); // → Fix
     renderFix();
   });
 }
@@ -454,17 +531,66 @@ function renderReviewInline() {
 function renderFix() {
   const fixList = $('#fix-list');
   fixList.innerHTML = '';
-  state.review.fixes.forEach(fix => {
+
+  const fixes = Array.isArray(state.review.fixes) ? state.review.fixes : [];
+  fixes.forEach(fix => {
     const li = document.createElement('li');
-    li.textContent = fix;
+    li.className = 'rich-fix-item';
+
+    if (typeof fix === 'object') {
+      li.innerHTML = `
+        <div class="fix-item-main">
+          <div class="fix-item-top">
+            <span class="fix-item-label">WHAT</span>
+            <strong class="fix-item-title">${fix.title}</strong>
+          </div>
+          <div class="fix-item-row">
+            <span class="fix-item-label">WHERE</span>
+            <code class="fix-item-path">${fix.where}</code>
+          </div>
+          <div class="fix-item-row">
+            <span class="fix-item-label">HOW</span>
+            <p class="fix-item-desc">${fix.how}</p>
+          </div>
+          ${fix.code ? `
+            <div class="fix-item-code">
+              <pre><code>${fix.code}</code></pre>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    } else {
+      li.textContent = fix;
+    }
     fixList.appendChild(li);
   });
 
   const preventList = $('#prevent-list');
   preventList.innerHTML = '';
-  state.review.prevention.forEach(prev => {
+  const preps = Array.isArray(state.review.prevention) ? state.review.prevention : [];
+  preps.forEach(p => {
     const li = document.createElement('li');
-    li.textContent = prev;
+    li.className = 'rich-prevent-item';
+
+    if (typeof p === 'object') {
+      li.innerHTML = `
+        <div class="prevent-item-main">
+          <div class="prevent-item-top">
+            <span class="prevent-badge">INNOVATION</span>
+            <strong class="prevent-title">${p.feature}</strong>
+          </div>
+          <p class="prevent-desc">${p.description}</p>
+          <div class="prevent-benefit">🚀 ${p.benefit}</div>
+          ${p.codeSnippet ? `
+            <div class="prevent-code">
+              <pre><code>${p.codeSnippet}</code></pre>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    } else {
+      li.textContent = p;
+    }
     preventList.appendChild(li);
   });
 
@@ -480,7 +606,7 @@ function renderFix() {
   }
 
   addNextButton($('.fix-wrapper'), 'See My Score →', () => {
-    goToStep(5); // → Score
+    goToStep(6); // → Score
     renderScore();
   });
 }
@@ -584,12 +710,12 @@ function renderScore() {
   if (state.mode === 'judge') {
     const confDisplay = $('#confidence-display');
     confDisplay.style.display = 'block';
-    
+
     const testWeight = (score.stats.passedAttacks / Math.max(1, score.stats.totalAttacks)) * 40;
     const commitWeight = Math.min(30, (state.projectInfo.recentCommits || 0) * 3);
     const stabilityWeight = (score.breakdown.stability / 100) * 30;
     const confidence = Math.round(Math.min(100, testWeight + commitWeight + stabilityWeight));
-    
+
     $('#confidence-value').textContent = confidence + '%';
     $('#confidence-bar-fill').style.width = confidence + '%';
     $('#confidence-basis').textContent = `Based on: ${score.stats.passedAttacks}/${score.stats.totalAttacks} tests passed · ${state.projectInfo.recentCommits || 0} recent commits · ${score.breakdown.stability}% stability`;
@@ -597,7 +723,7 @@ function renderScore() {
 
   // Continue button
   addNextButton($('.score-wrapper'), 'See Leaderboard →', () => {
-    goToStep(6); // → Leaderboard
+    goToStep(7); // → Leaderboard
     submitToLeaderboard();
   });
 }
@@ -645,7 +771,7 @@ function renderLeaderboard() {
 
     const rankDisplay = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : entry.rank === 3 ? '🥉' : `#${entry.rank}`;
     const rankClass = entry.rank <= 3 ? 'lb-rank lb-rank-medal' : 'lb-rank';
-    
+
     const entryLevel = getLevel(entry.score);
 
     row.innerHTML = `
@@ -655,7 +781,7 @@ function renderLeaderboard() {
       <span class="lb-score">${entry.score}/100</span>
       ${entry.badge ? `<span class="lb-badge">${entry.badge}</span>` : ''}
     `;
-    
+
     row.addEventListener('click', () => openProjectDashboard(entry.id));
     table.appendChild(row);
   });
@@ -751,7 +877,7 @@ async function openProjectDashboard(id) {
   const modal = $('#dashboard-modal');
   const loader = $('#dashboard-loading');
   const body = $('#dashboard-body');
-  
+
   modal.classList.remove('hidden');
   loader.classList.remove('hidden');
   body.classList.add('hidden');
@@ -765,7 +891,7 @@ async function openProjectDashboard(id) {
     // Populate Header
     $('#db-project-name').textContent = project.name;
     $('#db-project-url').textContent = project.url;
-    
+
     const level = getLevel(project.score);
     $('#db-level-emoji').textContent = level.emoji;
     $('#db-level-name').textContent = level.name;
@@ -795,7 +921,7 @@ async function openProjectDashboard(id) {
 
     // Populate AI Review
     const review = project.fullReview || {};
-    
+
     const issuesList = $('#db-issues-list');
     issuesList.innerHTML = '';
     (review.issues || []).forEach(iss => {
@@ -832,7 +958,7 @@ async function openProjectDashboard(id) {
 function initDashboardModal() {
   const modal = $('#dashboard-modal');
   const closeBtns = [$('#modal-close'), $('#modal-close-icon')];
-  
+
   closeBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       modal.classList.add('hidden');

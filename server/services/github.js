@@ -11,8 +11,8 @@ export async function fetchGitHubRepo(url) {
 
   const owner = encodeURIComponent(match[1]);
   const repo = encodeURIComponent(match[2].replace(/\.git$/, ''));
-  const headers = { 
-    'Accept': 'application/vnd.github.v3+json', 
+  const headers = {
+    'Accept': 'application/vnd.github.v3+json',
     'User-Agent': 'CodeJudge-AI-Scanner',
   };
 
@@ -139,7 +139,7 @@ export async function fetchGitHubRepo(url) {
   let totalCommits = 0;
   let firstCommitDate = null;
   let lastCommitDate = null;
-  
+
   try {
     // A) Fetch total commits and first commit date
     const commitRes = await fetch(
@@ -150,13 +150,13 @@ export async function fetchGitHubRepo(url) {
       const commits = await commitRes.json();
       if (commits.length > 0) {
         lastCommitDate = commits[0].commit?.author?.date || commits[0].commit?.committer?.date;
-        
+
         const linkHeader = commitRes.headers.get('link');
         if (linkHeader && linkHeader.includes('last')) {
           const lastMatch = linkHeader.match(/page=(\d+)>; rel="last"/);
           if (lastMatch) {
             totalCommits = parseInt(lastMatch[1], 10);
-            
+
             // Fetch the last page to get the earliest commit
             const firstCommitRes = await fetch(
               `https://api.github.com/repos/${owner}/${repo}/commits?per_page=1&page=${totalCommits}`,
@@ -232,7 +232,13 @@ export async function fetchGitHubRepo(url) {
     url,
     totalFiles: fileTree.length,
     fileTree: fileTree.slice(0, 200), // send first 200 files for analysis
-    qualitySignals,
+    qualitySignals: {
+      ...qualitySignals,
+      isSPA: (dependencies || []).some(d => d.includes('react') || d.includes('vue') || d.includes('next') || d.includes('vite') || d.includes('svelte')),
+      isTailwind: qualitySignals.isTailwind || (dependencies || []).some(d => d.includes('tailwind')),
+      hasAuth: qualitySignals.hasAuth || (dependencies || []).some(d => d.includes('auth') || d.includes('passport') || d.includes('jwt') || d.includes('clerk') || d.includes('auth0')),
+      hasDatabase: qualitySignals.hasDatabase || (dependencies || []).some(d => d.includes('mongoose') || d.includes('prisma') || d.includes('sequelize') || d.includes('pg') || d.includes('redis') || d.includes('firebase'))
+    },
     dependencies,
     devDependencies,
     recentCommits,
@@ -266,6 +272,11 @@ function analyzeFileTree(files) {
     ciPlatform: null,
     packageManager: null,
     testFileCount: 0,
+    hasAuth: false,
+    hasDatabase: false,
+    hasRoutes: false,
+    isSPA: false,
+    isTailwind: false,
   };
 
   for (const f of files) {
@@ -307,6 +318,12 @@ function analyzeFileTree(files) {
     if (lower === '.prettierrc' || lower === '.prettierrc.json' || lower === '.prettierrc.js' || lower === 'prettier.config.js') signals.hasPrettier = true;
     if (lower === '.editorconfig') signals.hasEditorconfig = true;
     if (lower === 'changelog.md' || lower === 'history.md') signals.hasChangelog = true;
+
+    // Feature detection based on file names
+    if (lower.includes('auth') || lower.includes('login') || lower.includes('passport') || lower.includes('jwt') || lower.includes('clerk')) signals.hasAuth = true;
+    if (lower.includes('mongoose') || lower.includes('prisma') || lower.includes('sequelize') || lower.includes('db.config') || lower.includes('database')) signals.hasDatabase = true;
+    if (lower.includes('/routes/') || lower.includes('/api/') || lower.includes('controller')) signals.hasRoutes = true;
+    if (lower.includes('tailwind.config')) signals.isTailwind = true;
   }
 
   return signals;
