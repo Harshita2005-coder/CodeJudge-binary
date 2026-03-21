@@ -95,6 +95,19 @@
               <span class="btn-arrow">▶</span>
             </button>
           </div>
+          <div class="landing-input-group" style="margin-top: 12px; max-width: 560px; margin-left: auto; margin-right: auto;">
+            <div class="input-wrapper">
+              <span class="input-icon">⚙️</span>
+              <input
+                type="text"
+                id="custom-config-input"
+                class="landing-input"
+                placeholder="Custom Judge Instructions (Optional - e.g. 'Focus heavily on Auth')"
+                autocomplete="off"
+                style="opacity: 0.8; font-size: 14px;"
+              />
+            </div>
+          </div>
           <p id="input-error" class="input-error"></p>
           <div class="landing-stats">
             <span class="stat"><strong id="stat-judged">0</strong> projects judged</span>
@@ -142,8 +155,9 @@
       <!-- SCREEN 3: Failure Detection -->
       <section id="screen-failures" class="screen">
         <div class="failures-wrapper">
-          <h2 class="section-title">💥 Failure Report</h2>
+          <h2 class="section-title">💥 The Verdict</h2>
           <p class="section-subtitle">Here's where your project broke</p>
+          <div id="breakpoint-banner" class="breakpoint-banner" style="display:none;"></div>
           <div class="failures-list" id="failures-list">
             <!-- failure items injected here -->
           </div>
@@ -158,14 +172,23 @@
           <div class="review-card roast-card" id="roast-card">
             <div class="review-card-header">
               <span class="review-card-icon">🔥</span>
-              <span class="review-card-label">The Roast</span>
+              <span class="review-card-label">Roast</span>
             </div>
             <p class="roast-text" id="roast-text"></p>
           </div>
+
+          <div class="review-card custom-verdict-card" id="custom-verdict-card" style="display:none; border-left: 3px solid #ff00ff; background: rgba(255, 0, 255, 0.05); margin-bottom: 24px;">
+            <div class="review-card-header">
+              <span class="review-card-icon">🎯</span>
+              <span class="review-card-label" style="color: #ff00ff;">Manual Test Result</span>
+            </div>
+            <p class="roast-text" id="custom-verdict-text" style="color: #eee; font-weight: 500; font-size: 16px;"></p>
+          </div>
+
           <div class="review-card issues-card" id="issues-card">
             <div class="review-card-header">
               <span class="review-card-icon">🧠</span>
-              <span class="review-card-label">Reality Check</span>
+              <span class="review-card-label">Reality</span>
             </div>
             <ul class="issues-list" id="issues-list"></ul>
           </div>
@@ -179,14 +202,32 @@
           <div class="review-card fix-card">
             <div class="review-card-header">
               <span class="review-card-icon">🛠</span>
-              <span class="review-card-label">How to Fix</span>
+              <span class="review-card-label">The Fix</span>
             </div>
             <ul class="fix-list" id="fix-list"></ul>
           </div>
+          
+          <div class="review-card before-after-card" id="before-after-card" style="display:none;">
+            <div class="review-card-header">
+              <span class="review-card-icon">⚖️</span>
+              <span class="review-card-label">Before vs After</span>
+            </div>
+            <div class="code-compare-grid">
+              <div class="code-block-container before-state">
+                <div class="code-header"><span class="code-status">❌</span> Failed State</div>
+                <pre><code id="top-fix-before"></code></pre>
+              </div>
+              <div class="code-block-container after-state">
+                <div class="code-header"><span class="code-status">✅</span> Secured State</div>
+                <pre><code id="top-fix-after"></code></pre>
+              </div>
+            </div>
+          </div>
+
           <div class="review-card prevent-card">
             <div class="review-card-header">
               <span class="review-card-icon">🧱</span>
-              <span class="review-card-label">How to Prevent</span>
+              <span class="review-card-label">Prevention</span>
             </div>
             <ul class="prevent-list" id="prevent-list"></ul>
           </div>

@@ -85,6 +85,7 @@ function showScreen(index) {
 // ===== Step 0: Submit =====
 function initLanding() {
   const input = $('#url-input');
+  const customConfigInput = $('#custom-config-input');
   const btn = $('#judge-btn');
   const error = $('#input-error');
 
@@ -93,6 +94,7 @@ function initLanding() {
 
   const handleSubmit = async () => {
     const url = input.value.trim();
+    const customConfig = customConfigInput?.value?.trim() || '';
     error.textContent = '';
 
     if (!url) {
@@ -113,20 +115,23 @@ function initLanding() {
       const res = await fetch('/api/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, customConfig }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || 'Failed to submit');
       }
 
-      state.projectInfo = await res.json();
+      state.projectInfo = data;
       goToStep(1); // → Analyze
     } catch (err) {
       error.textContent = err.message;
       btn.disabled = false;
       btn.querySelector('.btn-text').textContent = 'Judge My Project';
+    } finally {
+      // Logic for log injection later
     }
   };
 
@@ -178,6 +183,7 @@ function runProcessing() {
     `CI/CD: ${q.hasCI ? `✅ ${q.ciPlatform}` : '❌ No pipeline configured'}`,
     `Security: helmet=${q.hasHelmet ? '✅' : '❌'} | rate-limit=${q.hasRateLimit ? '✅' : '❌'} | validation=${q.hasValidation ? '✅' : '❌'}`,
     `Docker: ${q.hasDocker ? '✅' : '❌'} | TypeScript: ${q.hasTypescript ? '✅' : '❌'} | Linter: ${q.hasLinter ? '✅' : '❌'}`,
+    `Genesis Commit: ${state.projectInfo.firstCommitDate ? new Date(state.projectInfo.firstCommitDate).toDateString() : 'Unknown'}`,
     `Recent activity: ${state.projectInfo.recentCommits || 0} commits in last 30 days`,
     'Analysis complete. Running checks…',
   ];
@@ -252,7 +258,7 @@ function renderAttackCard(result, container) {
       <div class="attack-endpoint">${result.endpoint}</div>
       <div class="attack-detail">${result.details}</div>
     </div>
-    <span class="attack-timing">${result.responseTime}ms</span>
+    <span class="attack-timing">${result.isSimulated ? `<span style="opacity:0.5; font-size:0.7em; margin-right:4px;">sim. latency</span>` : ''}${result.responseTime}ms</span>
   `;
   container.appendChild(card);
 }
@@ -272,10 +278,20 @@ function showFailures() {
   list.innerHTML = '';
 
   const failures = state.attackResults.filter(a => !a.passed);
+  const breakpointBanner = $('#breakpoint-banner');
 
   if (failures.length === 0) {
+    breakpointBanner.style.display = 'none';
     verdict.innerHTML = '🎉 <strong>Impressive!</strong> Your project survived all attacks. But the review might still be brutal…';
   } else {
+    // Breakpoint Highlight (FIX 5)
+    const firstFail = failures[0];
+    breakpointBanner.style.display = 'block';
+    breakpointBanner.innerHTML = `
+      <div class="breakpoint-title">🚨 BREAKPOINT DETECTED</div>
+      <div class="breakpoint-desc">Your app fails <strong>FIRST</strong> at <code>${firstFail.endpoint}</code> due to <strong>${firstFail.name}</strong>.</div>
+    `;
+
     failures.forEach((f, i) => {
       const item = document.createElement('div');
       item.className = 'failure-item';
@@ -325,6 +341,14 @@ function renderReview() {
   // Roast
   $('#roast-text').textContent = state.review.roast;
 
+  // Custom Verdict / Manual Test output
+  if (state.review.customVerdict && state.review.customVerdict.trim() !== '') {
+    $('#custom-verdict-card').style.display = 'block';
+    $('#custom-verdict-text').textContent = state.review.customVerdict;
+  } else {
+    $('#custom-verdict-card').style.display = 'none';
+  }
+
   // Issues
   const issuesList = $('#issues-list');
   issuesList.innerHTML = '';
@@ -362,6 +386,15 @@ function renderFix() {
 
   // Impact
   $('#impact-text').textContent = state.review.impact;
+
+  // Before vs After (FIX 3)
+  if (state.review.topFixBefore && state.review.topFixAfter) {
+    $('#before-after-card').style.display = 'block';
+    $('#top-fix-before').textContent = state.review.topFixBefore;
+    $('#top-fix-after').textContent = state.review.topFixAfter;
+  } else {
+    $('#before-after-card').style.display = 'none';
+  }
 
   // Add continue button
   addNextButton($('.fix-wrapper'), 'See My Score →', () => {
