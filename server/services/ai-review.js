@@ -156,7 +156,7 @@ RULES:
 
 // ===== GEMINI API =====
 async function callGemini(apiKey, prompt) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`;
 
   const res = await fetch(url, {
     method: 'POST',
@@ -209,7 +209,7 @@ async function callOpenRouter(apiKey, prompt) {
   });
 
   const response = await openai.chat.completions.create({
-    model: 'google/gemini-2.5-flash',
+    model: 'google/gemini-flash-latest',
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.8,
     max_tokens: 1200,
