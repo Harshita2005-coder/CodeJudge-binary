@@ -4,8 +4,51 @@ import { runChaosSimulation } from '../services/chaos.js';
 import { generateReview } from '../services/ai-review.js';
 import { calculateScore } from '../services/scoring.js';
 import { getLeaderboard, addToLeaderboard, getProjectById } from '../services/leaderboard.js';
+import { analyzeAuthenticity } from '../services/authenticity.js';
 
 export const apiRouter = Router();
+
+/**
+ * Auth Routes
+ */
+apiRouter.get('/auth/github', (req, res) => {
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  if (!clientId) return res.status(500).json({ error: 'GitHub Client ID not configured' });
+  const redirectUri = `${req.protocol}://${req.get('host')}/api/auth/github/callback`;
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=repo,user`;
+  res.redirect(url);
+});
+
+apiRouter.get('/auth/github/callback', async (req, res) => {
+  const { code } = req.query;
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+
+  try {
+    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: code
+      })
+    });
+    const tokenData = await tokenRes.json();
+
+    if (tokenData.access_token) {
+      // Redirect back to frontend with a script to communicate the token
+      res.send(`<script>window.opener.postMessage({ type: 'github-token', token: '${tokenData.access_token}' }, '*'); window.close();</script>`);
+    } else {
+      res.status(400).json(tokenData);
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 /**
  * POST /api/submit
@@ -13,7 +56,7 @@ export const apiRouter = Router();
  */
 apiRouter.post('/submit', async (req, res) => {
   try {
-    const { url, customConfig } = req.body;
+    const { url, customConfig, githubToken } = req.body;
     console.log(`[API] Submit request for URL: ${url}`);
 
     if (!url || typeof url !== 'string' || url.trim() === '') {
@@ -47,7 +90,16 @@ apiRouter.post('/submit', async (req, res) => {
       });
     }
 
-    const projectInfo = await fetchGitHubRepo(url);
+    const projectInfo = await fetchGitHubRepo(url, githubToken);
+
+    // Add Authenticity Analysis (Timeline Truth)
+    // Default window: last 72 hours for "hackathon" simulation
+    const window = {
+      start: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      end: new Date().toISOString()
+    };
+    projectInfo.authenticity = analyzeAuthenticity(projectInfo, window);
+
     if (customConfig) {
       projectInfo.customConfig = customConfig;
     }

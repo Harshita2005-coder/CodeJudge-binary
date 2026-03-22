@@ -107,6 +107,19 @@
           <p class="landing-description" id="landing-description">Submit your project → Get stress-tested → See failures
             → Get fixes → Improve your score</p>
 
+          <!-- GitHub Auth Controls -->
+          <div class="github-auth-container">
+            <button id="github-login-btn" class="github-btn login">
+              <span class="github-icon">GITHUB</span>
+              <span class="github-btn-text">Connect GitHub to find loophole in logic code </span>
+            </button>
+            <button id="github-logout-btn" class="github-btn logout" style="display:none;">
+              <span class="github-icon">GITHUB</span>
+              <span class="github-btn-text">Disconnect Deep Scan</span>
+            </button>
+            <p id="github-status" class="github-status">Limited Scan (Public only)</p>
+          </div>
+
           <div class="landing-input-group">
             <div class="input-wrapper">
               <span class="input-icon">🔗</span>
@@ -197,6 +210,15 @@
               <h3 class="xray-card-title">Risk Mapping</h3>
               <div class="xray-card-content" id="xray-risks">
                 <!-- Risks -->
+              </div>
+            </div>
+
+            <!-- 4. Timeline Truth (New) -->
+            <div class="xray-card ripple-card timeline-truth-card">
+              <div class="xray-card-icon">⏱️</div>
+              <h3 class="xray-card-title">Timeline Truth</h3>
+              <div class="xray-card-content" id="xray-timeline">
+                <!-- Timeline/Authenticity -->
               </div>
             </div>
           </div>

@@ -79,6 +79,8 @@ function buildPrompt(projectInfo, attackResults) {
   const q = projectInfo.qualitySignals || {};
 
   return `You are "CodeJudge AI", a brutally honest hackathon judge. You have REAL data from analyzing this project — use it. Be specific, not generic.
+  
+  CRITICAL RULE: Avoid generic "No linter", "No tests", or "No CI/CD" boilerplate if there are MORE interesting architectural failures (like bad error handling, security gaps, or dependency issues) reported in the ANALYSIS RESULTS. If you must report a missing tool, explain EXACTLY why it matters for this SPECIFIC project (e.g. "Because this is a ${projectInfo.language} fintech app, the lack of ${q.hasLinter ? 'linter' : 'validation'} is catastrophic").
 
 PROJECT:
 - Name: ${projectInfo.name}
@@ -112,20 +114,63 @@ ANALYSIS RESULTS (${failedAttacks.length}/${attackResults.length} checks FAILED)
 ${failedAttacks.map(a => `❌ ${a.name}: ${a.details}`).join('\n')}
 ${passedAttacks.map(a => `✅ ${a.name}: ${a.details}`).join('\n')}
 
+---
+INSTRUCTIONS FOR FINDING VULNERABILITIES:
+   - NEVER give generic "add a linter" or "write comments" advice.
+   - You MUST analyze the REAL SOURCE CODE SNIPPETS provided below.
+   - Specifically look for:
+     - **Logical Loopholes**: Can a user bypass an auth check? Is there a race condition? Can someone manipulate state?
+     - **Security Vulnerabilities**: SQL injection, XSS, insecure storage, or leaked tokens in the code.
+     - **Business Logic Flaws**: Flaws in how the core app logic works (e.g., spending more credits than available).
+   - For every issue, cite the file name and the specific logical flaw found in the code.
+   - If no source code is provided, roast them for having an "opaque" project.
+
+---
+REAL SOURCE CODE SNIPPETS (deep analysis):
+${projectInfo.sourceCode || '(No source code provided / Unauthorized)'}
+
+METADATA:
+- Project Name: ${projectInfo.name}
+- Total Commits: ${projectInfo.totalCommits || 0}
+- Timeline Integrity: ${projectInfo.authenticity?.verdict || 'Unknown'} (Authenticity Score: ${projectInfo.authenticity?.score || 0}/100)
+- Detected Stack: Frontend=${sig.frontendFramework}, Backend=${sig.backendFramework}, DB=${sig.hasDatabase ? 'Yes' : 'No'}
+- Quality Checks: Tests=${sig.hasTests}, CI/CD=${sig.hasCI}, Docker=${sig.hasDocker}
+
+---
+Output MUST be a JSON array of issues:
+[
+  {
+    "id": "loophole-1",
+    "type": "logic", 
+    "severity": "critical", 
+    "title": "Logic Flaw: [Brief title]",
+    "description": "Expose the exact loophole here. Be brutal.",
+    "evidence": "Found in [file]: [describe code pattern]",
+    "fix": "Specific code fix"
+  }
+]
 README (first 3000 chars):
 ${(projectInfo.readme || '(No README)').substring(0, 3000)}
 
 Respond in this EXACT JSON format (no markdown, no code blocks, just raw JSON):
 {
   "roast": "One devastating witty sentence about this SPECIFIC project based on the real findings above",
-  "issues": ["Specific issue 1 with evidence", "Specific issue 2 with evidence", "Specific issue 3", "Specific issue 4", "Specific issue 5"],
+  "issues": [
+    {
+       "type": "Logic Loophole",
+       "severity": "CRITICAL",
+       "title": "Auth Bypass Vulnerability",
+       "description": "Full explanation of the loophole found in the logic code.",
+       "evidence": "Citing specific file and code pattern from the source snippets"
+    }
+  ],
   "fixes": [
     {
       "title": "Short title of fix",
-      "issue": "What is being fixed",
-      "how": "Step-by-step implementation guide",
-      "where": "Suggested file path or component name",
-      "code": "One-line or short block of code for this fix"
+       "issue": "What is being fixed",
+       "how": "Step-by-step implementation guide",
+       "where": "Suggested file path or component name",
+       "code": "One-line or short block of code for this fix"
     }
   ],
   "prevention": [
@@ -146,7 +191,8 @@ RULES:
 - Provide exactly 3 detailed fixes and 2 innovative prevention features.
 - Reference real data: actual dependencies, actual file counts, actual missing tools
 - Don't say "the project" — use the project name "${projectInfo.name}"
-- Every issue must cite evidence from the analysis above
+- Every issue must cite evidence from the analysis above, including SPECIFIC LINE NUMBERS or VULNERABLE LOGIC from the provided source code snippets.
+- Use the provided REAL SOURCE CODE to find critical loopholes: auth bypasses, race conditions, unsanitized inputs, or logical flaws.
 - Every fix must name a specific package, tool, or action with implementation context
 - In "prevention", suggest at least ONE highly innovative feature that leverages the project's tech stack (e.g. 'Add real-time collaboration using Socket.io' if it's a dashboard)${projectInfo.customConfig
       ? `\n\n🚨 JUDGE'S CUSTOM INSTRUCTION AND CONFIG 🚨\nThe Master Judge explicitly demanded to manually test/analyze this: "${projectInfo.customConfig}". \nYOU ABSOLUTELY MUST write the result of this manual test inside the "customVerdict" JSON field!`
@@ -276,11 +322,12 @@ function generateMockReview(projectInfo, attackResults) {
   // Build issues from real analysis
   const issues = failedAttacks.slice(0, 5).map(a => a.details);
   if (issues.length < 5) {
-    if (!q.hasTests) issues.push('No test files found in the repository — zero automated test coverage');
-    if (!q.hasCI) issues.push('No CI/CD pipeline configured — code changes go unvalidated');
-    if (!q.hasDocker) issues.push('No containerization — deployment requires manual environment setup');
-    if (!q.hasLinter) issues.push('No linter configured — code style and quality are unchecked');
-    if (!q.hasTypescript && projectInfo.language === 'JavaScript') issues.push('No TypeScript — silent type errors will hit production');
+    const projectType = projectInfo.language || 'application';
+    if (!q.hasTests) issues.push(`The ${name} codebase is flying blind with zero automated test coverage. Regression bugs in ${projectType} logic will only be found by angry users.`);
+    if (!q.hasCI) issues.push(`No CI/CD pipeline detected. Changes to this ${projectType} project are flying manually, risking "works on my machine" syndrome.`);
+    if (!q.hasDocker) issues.push(`Architecture lacks containerization. Deployment for ${name} remains a manual, error-prone environment setup chore.`);
+    if (!q.hasLinter) issues.push(`Static analysis is absent. Without a linter, ${name}'s ${projectType} source code is likely a goldmine for subtle syntax traps.`);
+    if (!q.hasTypescript && projectInfo.language === 'JavaScript') issues.push(`Plain JavaScript detected. Without type safety, ${name} is at the mercy of runtime 'undefined' crashes.`);
   }
 
   // Build fixes from real missing items
